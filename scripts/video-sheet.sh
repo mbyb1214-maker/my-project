@@ -4,7 +4,7 @@
 #
 # 出力:
 #   <出力先>/meta.txt        尺・解像度・fps・音量
-#   <出力先>/sheet_1s.jpg    1秒ごとのコマ(全体の流れ確認用)
+#   <出力先>/sheet_1s.jpg    全体の流れ(1秒ごと。40秒を超える動画は自動で間引く)
 #   <出力先>/sheet_head.jpg  冒頭2秒を8分割(フックの確認用)
 #   <出力先>/sheet_tail.jpg  ラスト3秒を8分割(オチ・CTAの確認用)
 set -euo pipefail
@@ -38,9 +38,19 @@ SEC="$(python3 -c "h,m,s='${DUR}'.split(':'); print(float(h)*3600+float(m)*60+fl
   { "$FF" -hide_banner -i "$SRC" -af volumedetect -f null /dev/null 2>&1 || true; } | grep -E "mean_volume|max_volume" || true
 } > "$OUT/meta.txt"
 
-# 全体(1秒ごと)
+# 全体。尺に合わせてコマ数と行数を決める(最大40コマ。長い動画は間引く)
+read -r FPS ROWS <<EOF
+$(python3 -c "
+import math
+sec = ${SEC}
+cols, cap = 5, 40
+fps = min(1.0, cap / max(sec, 1))
+n = min(cap, max(1, math.ceil(sec * fps)))
+print(round(fps, 3), math.ceil(n / cols))
+")
+EOF
 "$FF" -hide_banner -loglevel error -i "$SRC" \
-  -vf "fps=1,scale=320:-1,tile=5x4:margin=6:padding=6" -frames:v 1 -q:v 3 "$OUT/sheet_1s.jpg"
+  -vf "fps=${FPS},scale=320:-1,tile=5x${ROWS}:margin=6:padding=6" -frames:v 1 -q:v 3 "$OUT/sheet_1s.jpg"
 
 # 冒頭2秒(フック)
 "$FF" -hide_banner -loglevel error -ss 0 -t 2 -i "$SRC" \
